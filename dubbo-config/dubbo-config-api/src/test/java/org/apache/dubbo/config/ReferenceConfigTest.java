@@ -42,6 +42,7 @@ import org.apache.dubbo.rpc.model.ApplicationModel;
 import org.apache.dubbo.rpc.model.FrameworkModel;
 import org.apache.dubbo.rpc.model.ModuleModel;
 import org.apache.dubbo.rpc.model.ServiceMetadata;
+import org.apache.dubbo.rpc.protocol.ReferenceCountInvokerWrapper;
 import org.apache.dubbo.rpc.protocol.injvm.InjvmInvoker;
 import org.apache.dubbo.rpc.protocol.injvm.InjvmProtocol;
 import org.apache.dubbo.rpc.service.GenericService;
@@ -479,10 +480,11 @@ class ReferenceConfigTest {
 
         referenceConfig.init();
         Assertions.assertTrue(referenceConfig.getInvoker() instanceof MockClusterInvoker);
-        Invoker<?> withFilter = ((MockClusterInvoker<?>) referenceConfig.getInvoker()).getDirectory().getAllInvokers().get(0);
-        Assertions.assertTrue(withFilter instanceof ListenerInvokerWrapper);
-        Assertions.assertTrue(((ListenerInvokerWrapper<?>) withFilter).getInvoker() instanceof InjvmInvoker);
-        URL url = withFilter.getUrl();
+        Invoker<?> withCount = ((MockClusterInvoker<?>) referenceConfig.getInvoker()).getDirectory().getAllInvokers().get(0);
+        Assertions.assertTrue(withCount instanceof ReferenceCountInvokerWrapper);
+        Assertions.assertTrue(((ReferenceCountInvokerWrapper<?>) withCount).getInvoker() instanceof ListenerInvokerWrapper);
+        Assertions.assertTrue(((ListenerInvokerWrapper<?>)(((ReferenceCountInvokerWrapper<?>) withCount).getInvoker())).getInvoker() instanceof InjvmInvoker);
+        URL url = withCount.getUrl();
         Assertions.assertEquals("application1", url.getParameter("application"));
         Assertions.assertEquals("value1", url.getParameter("key1"));
         Assertions.assertEquals("value2", url.getParameter("key2"));
@@ -966,9 +968,9 @@ class ReferenceConfigTest {
     @Test
     void testDifferentClassLoader() throws Exception {
         ApplicationConfig applicationConfig = new ApplicationConfig("TestApp");
-        ApplicationModel applicationModel = new ApplicationModel(FrameworkModel.defaultModel());
+        ApplicationModel applicationModel = ApplicationModel.defaultModel();
         applicationModel.getApplicationConfigManager().setApplication(applicationConfig);
-        ModuleModel moduleModel = new ModuleModel(applicationModel);
+        ModuleModel moduleModel = applicationModel.newModule();
 
         DemoService demoService = new DemoServiceImpl();
         ServiceConfig<DemoService> serviceConfig = new ServiceConfig<>();
@@ -1038,6 +1040,7 @@ class ReferenceConfigTest {
     @Test
     @DisabledForJreRange(min = JRE.JAVA_16)
     public void testDifferentClassLoaderRequest() throws Exception {
+        FrameworkModel frameworkModel = FrameworkModel.defaultModel();
         String basePath = DemoService.class.getProtectionDomain().getCodeSource().getLocation().getFile();
         basePath = java.net.URLDecoder.decode(basePath, "UTF-8");
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
@@ -1046,9 +1049,9 @@ class ReferenceConfigTest {
         TestClassLoader2 classLoader3 = new TestClassLoader2(classLoader2, basePath);
 
         ApplicationConfig applicationConfig = new ApplicationConfig("TestApp");
-        ApplicationModel applicationModel = new ApplicationModel(FrameworkModel.defaultModel());
+        ApplicationModel applicationModel = frameworkModel.newApplication();
         applicationModel.getApplicationConfigManager().setApplication(applicationConfig);
-        ModuleModel moduleModel = new ModuleModel(applicationModel);
+        ModuleModel moduleModel = applicationModel.newModule();
 
         Class<?> clazz1 = classLoader1.loadClass(MultiClassLoaderService.class.getName(), false);
         Class<?> clazz1impl = classLoader1.loadClass(MultiClassLoaderServiceImpl.class.getName(), false);
